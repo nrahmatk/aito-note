@@ -10,5 +10,4 @@ storage/logs/*
 bootstrap/cache/*
 .phpunit.result.cache
 tests
-docker
 Dockerfile
