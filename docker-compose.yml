@@ -18,8 +18,6 @@ services:
     volumes:
       - ./backend/database:/var/www/database
       - ./backend/storage:/var/www/storage
-    networks:
-      - notes-network
 
   # 2. Nginx Web Server for Backend API
   backend-nginx:
@@ -32,9 +30,3 @@ services:
       - "${APP_BACKEND_PORT:-8000}:80"
     depends_on:
       - backend
-    networks:
-      - notes-network
-
-networks:
-  notes-network:
-    driver: bridge
