@@ -35,22 +35,6 @@ services:
     networks:
       - notes-network
 
-  # 3. Frontend Web Server (React SPA)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api}
-    container_name: aito-note-frontend
-    restart: unless-stopped
-    ports:
-      - "${APP_FRONTEND_PORT:-3000}:80"
-    depends_on:
-      - backend-nginx
-    networks:
-      - notes-network
-
 networks:
   notes-network:
     driver: bridge

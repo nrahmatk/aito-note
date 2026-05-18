@@ -1,103 +1,97 @@
-# 🐳 Panduan Docker untuk Running Aito-Note
+# 🐳 Panduan Docker & Deploy Aito-Note (Terpisah)
 
-Dokumentasi ini menjelaskan arsitektur Docker yang telah dibuat untuk menjalankan aplikasi **Aito-Note** (Backend Laravel & Frontend React/Vite) secara containerized, lengkap dengan perintah-perintah yang Anda perlukan.
+Dokumentasi ini menjelaskan arsitektur baru yang **terpisah (decoupled)** antara **Frontend (React/Vite)** dan **Backend (Laravel API)**. Pemisahan ini merupakan praktik terbaik (best practice) yang membuat deployment Anda di Coolify jauh lebih cepat, ringan, dan bebas dari konflik port VPS!
 
 ---
 
-## 🏗️ Arsitektur Container
+## 🏗️ Arsitektur Baru (Production/VPS)
 
-Aplikasi ini dibagi menjadi 3 container utama yang berjalan di dalam satu network internal (`notes-network`):
+Di server VPS (Coolify), aplikasi Anda dideploy secara independen menjadi dua resource terpisah:
 
 ```mermaid
 graph TD
-    Browser[🌐 Web Browser / Host] -->|Port 3000| FE[⚡ notes-frontend <br/> Nginx + React Build]
-    Browser -->|Port 8000| BE_Nginx[🛡️ notes-backend-nginx <br/> Nginx Gateway]
-    BE_Nginx -->|FastCGI Port 9000| BE[🐘 notes-backend <br/> PHP 8.3 FPM + SQLite]
+    Browser[🌐 Web Browser / Client] -->|https://note.studio.my.id| FE[⚡ aito-note-frontend <br/> Standalone React Nginx]
+    Browser -->|https://api-note2.studio.my.id/api| BE_Nginx[🛡️ aito-note-backend-nginx <br/> Nginx Gateway]
+    BE_Nginx -->|FastCGI Port 9000| BE[🐘 aito-note-backend <br/> PHP 8.4 FPM + SQLite]
 ```
 
-1. **`aito-note-frontend` (Port `3000`):**
-   - React + Vite SPA yang sudah dibundel untuk production dan disajikan secara efisien menggunakan **Nginx Alpine**.
-   - Dilengkapi konfigurasi SPA routing (agar tidak 404 saat halaman di-refresh di URL seperti `/login` atau `/notes`).
-   - Secara otomatis terhubung ke backend API di `http://localhost:8000/api` menggunakan variabel build `VITE_API_URL`.
+### 1. Backend Stack (Docker Compose di Coolify)
+* Dideploy menggunakan resource **Docker Compose** di Coolify.
+* Hanya menjalankan kontainer backend (`backend` + `backend-nginx`).
+* **Bebas Konflik Port:** Kita tidak perlu me-map port kontainer ke host VPS lagi! Coolify merutekan domain `api-note2.studio.my.id` secara internal ke port `80` pada container `backend-nginx`.
 
-2. **`aito-note-backend-nginx` (Port `8000`):**
-   - Nginx server tipis yang bertindak sebagai gateway di depan Laravel backend.
-   - Menangani file static dan mem-proxy request dinamis `.php` ke service PHP-FPM backend.
-
-3. **`aito-note-backend` (Internal Port `9000`):**
-   - **PHP 8.3-FPM (Alpine)** yang dikonfigurasi dengan semua ekstensi Laravel yang diperlukan (`pdo_sqlite`, `bcmath`, `gd`, `zip`, dll.).
-   - Database SQLite di-mount ke host (`./backend/database`), sehingga data note yang sudah ada **tetap aman, persisten, dan sinkron** dengan environment lokal Anda.
+### 2. Frontend App (Standalone Application di Coolify)
+* Dideploy sebagai **Standalone Application** di Coolify dari sub-folder `/frontend`.
+* Menghubungi API melalui variabel `VITE_API_URL` yang disetel ke `https://api-note2.studio.my.id/api`.
 
 ---
 
-## 🛠️ File-File Docker yang Dibuat
+## 🛠️ Langkah-Langkah Deploy di Coolify
 
-1. **[`docker-compose.yml`](file:///d:/project/ADW/Belajar/notes/docker-compose.yml)**: Orkestrasi seluruh container, port forwarding, database volume, dan variabel environment.
-2. **[`backend/Dockerfile`](file:///d:/project/ADW/Belajar/notes/backend/Dockerfile)**: Dockerfile PHP 8.3-FPM dengan SQLite dan Composer caching optimal.
-3. **[`backend/docker/nginx/default.conf`](file:///d:/project/ADW/Belajar/notes/backend/docker/nginx/default.conf)**: Konfigurasi Nginx proxy ke container PHP-FPM.
-4. **[`frontend/Dockerfile`](file:///d:/project/ADW/Belajar/notes/frontend/Dockerfile)**: Multi-stage Dockerfile untuk build React (Node.js) & serve dengan Nginx.
-5. **[`frontend/docker/nginx.conf`](file:///d:/project/ADW/Belajar/notes/frontend/docker/nginx.conf)**: Konfigurasi Nginx untuk frontend SPA router support.
-6. **[`.dockerignore` Backend](file:///d:/project/ADW/Belajar/notes/backend/.dockerignore)** & **[`.dockerignore` Frontend](file:///d:/project/ADW/Belajar/notes/frontend/.dockerignore)**: Mempercepat build dengan memisahkan `node_modules`, `vendor`, `.git`, dll.
+Ikuti langkah mudah berikut untuk mendeploy kedua bagian ini:
+
+### Langkah A: Deploy Backend (Laravel API)
+
+1. **Buat Resource Baru di Coolify:**
+   * Pilih **New Resource** -> **Docker Compose**.
+   * Hubungkan ke repositori GitHub Anda (`nrahmatk/aito-note`).
+   * Gunakan branch **`main`**.
+2. **Konfigurasi Domain & Build:**
+   * **Domain untuk backend-nginx:** Masukkan `https://api-note2.studio.my.id`.
+   * **Base Directory:** `/`
+   * **Docker Compose Location:** `/docker-compose.yml`
+3. **Environment Variables:**
+   * Di tab **Environment Variables**, tambahkan:
+     * `APP_BACKEND_PORT=8008` (hanya untuk lokal/VPS jika Anda masih ingin membuka port mentahnya).
+4. **Deploy:**
+   * Klik **Redeploy / Deploy**. Setelah statusnya **`Success/Finished`**, API Anda siap diakses!
 
 ---
 
-## 🚀 Cara Menjalankan Aplikasi
+### Langkah B: Deploy Frontend (React SPA)
 
-> [!NOTE]  
-> Pastikan aplikasi Docker Desktop di Windows Anda sudah aktif sebelum menjalankan perintah-perintah di bawah.
+1. **Buat Resource Baru di Coolify:**
+   * Pilih **New Resource** -> **Public Repository / Private Repository** (pilih Standalone Application).
+   * Hubungkan ke repositori GitHub Anda (`nrahmatk/aito-note`), branch **`main`**.
+2. **Konfigurasi Build & Direktori:**
+   * **Domain untuk frontend:** Masukkan `https://note.studio.my.id`.
+   * **Base Directory:** `/frontend` *(Sangat penting! Ini memberi tahu Coolify untuk fokus hanya pada folder frontend)*.
+   * **Dockerfile Path:** `Dockerfile` *(Coolify akan otomatis menggunakan `frontend/Dockerfile`)*.
+3. **Environment Variables:**
+   * Di tab **Environment Variables**, tambahkan:
+     * `VITE_API_URL=https://api-note2.studio.my.id/api` *(Ini memberi tahu React ke mana harus memanggil API)*.
+4. **Deploy:**
+   * Klik **Deploy**. Setelah statusnya hijau, web Anda sudah online dan terhubung penuh ke backend API!
 
-### 1. Build dan Jalankan Container (Pertama Kali / Rebuild)
-Buka terminal (PowerShell/Command Prompt) di direktori root `notes/`, lalu jalankan:
+---
+
+## 💻 Cara Menjalankan Secara Lokal (Local Development)
+
+Untuk menjalankan di komputer lokal Anda, arsitektur terpisah ini sangat nyaman dan cepat:
+
+### 1. Jalankan Backend (Docker)
+Buka terminal di direktori utama `notes/` dan jalankan:
 ```bash
 docker compose up --build -d
 ```
-*Flag `-d` (detached mode) akan menjalankan container di background sehingga terminal Anda tetap bebas digunakan.*
+API Anda akan langsung aktif di **`http://localhost:8000/api`**.
 
-### 2. Memeriksa Status Container
-Gunakan perintah berikut untuk memastikan semua container berjalan dengan status `Up`:
+### 2. Jalankan Frontend (Lokal dengan pnpm)
+Buka terminal baru di direktori `notes/frontend/` dan jalankan:
 ```bash
-docker compose ps
+pnpm install
+pnpm dev
 ```
-
-### 3. Memantau Log Realtime
-Jika Anda ingin melihat aktivitas log dari seluruh container (misalnya error PHP atau request Nginx):
-```bash
-docker compose logs -f
-```
-
-### 4. Menghentikan Container
-Untuk mematikan seluruh container tanpa menghapus data database:
-```bash
-docker compose down
-```
-
----
-
-## 🌐 Akses Aplikasi
-
-Setelah container berhasil berjalan (`Up`), Anda dapat langsung membuka browser:
-* **Frontend Web App:** 👉 [http://localhost:3000](http://localhost:3000)
-* **Backend API (Laravel Health/JSON):** 👉 [http://localhost:8000/api](http://localhost:8000/api)
+Website frontend Anda akan aktif secara instant di **`http://localhost:5173`** (atau port default Vite Anda) dan akan langsung terhubung secara dinamis ke backend API lokal Anda di port `8000`.
 
 ---
 
 ## ⚠️ Tips & Troubleshooting
 
 > [!TIP]  
-> **Database Persistence:**  
-> SQLite database Anda tersimpan di file `./backend/database/database.sqlite` di komputer lokal Anda. Setiap kali Anda menambah/mengubah data di dalam container, file lokal di host akan ikut ter-update, sehingga data Anda tidak akan hilang saat container dihancurkan (`docker compose down`).
-
-> [!WARNING]  
-> **Masalah Port Konflik:**  
-> Pastikan tidak ada aplikasi lokal lain (seperti `php artisan serve` lokal Anda yang sedang berjalan di port `8000` atau program lain di port `3000`).  
-> *Sebelum menjalankan docker, matikan service lokal yang sedang berjalan di terminal Anda.*
+> **Database SQLite Lokal & VPS:**  
+> Di lokal Anda, data SQLite tersimpan di file `./backend/database/database.sqlite` dan bersifat persisten. Di VPS, Coolify akan menggunakan volume persistence untuk menjaga data Anda tetap aman saat update.
 
 > [!IMPORTANT]  
-> **Menjalankan Perintah Artisan di Dalam Container:**  
-> Jika Anda perlu menjalankan perintah Laravel (misal migrate baru, seeder, atau tinker) di dalam container backend, gunakan `docker compose exec`:
-> - **Migrate Ulang / Fresh:**  
->   `docker compose exec backend php artisan migrate:fresh --seed`
-> - **Masuk ke Laravel Tinker:**  
->   `docker compose exec backend php artisan tinker`
-> - **Clear Cache Laravel:**  
->   `docker compose exec backend php artisan optimize:clear`
+> **Enkripsi Cloudflare:**  
+> Pastikan di panel **Cloudflare -> SSL/TLS** Anda memilih enkripsi **Full** atau **Full (Strict)** agar sertifikat Let's Encrypt bawaan dari Coolify dan Cloudflare dapat bersinkronisasi secara aman tanpa mengalami masalah redirect loop.
